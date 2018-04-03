@@ -8,12 +8,10 @@
 #
 
 
-
 import ConfigParser
 import multiprocessing
 import optparse
 import os
-# -- NOT-NEEDED: import Queue
 import shutil
 import subprocess
 import sys
@@ -30,17 +28,18 @@ except ImportError:
 
 import multimechanize.core as core
 import multimechanize.results as results
-import multimechanize.resultswriter as resultswriter
+import multimechanize.resultswriter as results_writer
 import multimechanize.progressbar as progressbar
-from multimechanize import __version__ as VERSION
+from multimechanize import __version__ as mm_version
+
 
 def main():
     """
-    Main function to run multimechanize benchmark/performance test.
+    Main function to run multi-mechanize benchmark/performance test.
     """
 
     usage = 'Usage: %prog <project name> [options]'
-    parser = optparse.OptionParser(usage=usage, version=VERSION)
+    parser = optparse.OptionParser(usage=usage, version=mm_version)
     parser.add_option('-p', '--port', dest='port', type='int', help='rpc listener port')
     parser.add_option('-r', '--results', dest='results_dir', help='results directory to reprocess')
     parser.add_option('-b', '--bind-addr', dest='bind_addr', help='rpc bind address', default='localhost')
@@ -68,20 +67,21 @@ def main():
     return
 
 
-
 def run_test(project_name, cmd_opts, remote_starter=None):
     if remote_starter is not None:
         remote_starter.test_running = True
         remote_starter.output_dir = None
 
-    run_time, rampup, results_ts_interval, console_logging, progress_bar, results_database, post_run_script, xml_report, user_group_configs = configure(project_name, cmd_opts)
+    run_time, ramp_up, results_ts_interval, console_logging, progress_bar, results_database, post_run_script, \
+    xml_report, user_group_configs = configure(project_name, cmd_opts)
 
     run_localtime = time.localtime()
-    output_dir = '%s/%s/results/results_%s' % (cmd_opts.projects_dir, project_name, time.strftime('%Y.%m.%d_%H.%M.%S/', run_localtime))
+    output_dir = '%s/%s/results/results_%s' % (
+        cmd_opts.projects_dir, project_name, time.strftime('%Y.%m.%d_%H.%M.%S/', run_localtime))
 
     # this queue is shared between all processes/threads
     queue = multiprocessing.Queue()
-    rw = resultswriter.ResultsWriter(queue, output_dir, console_logging)
+    rw = results_writer.ResultsWriter(queue, output_dir, console_logging)
     rw.daemon = True
     rw.start()
 
@@ -89,10 +89,11 @@ def run_test(project_name, cmd_opts, remote_starter=None):
     script_prefix = os.path.normpath(script_prefix)
 
     user_groups = []
+    ug_config = None
     for i, ug_config in enumerate(user_group_configs):
         script_file = os.path.join(script_prefix, ug_config.script_file)
         ug = core.UserGroup(queue, i, ug_config.name, ug_config.num_threads,
-                            script_file, run_time, rampup)
+                            script_file, run_time, ramp_up)
         user_groups.append(ug)
     for user_group in user_groups:
         user_group.start()
@@ -112,31 +113,34 @@ def run_test(project_name, cmd_opts, remote_starter=None):
             while elapsed < (run_time + 1):
                 p.update_time(elapsed)
                 if sys.platform.startswith('win'):
-                    print '%s   transactions: %i  timers: %i  errors: %i\r' % (p, rw.trans_count, rw.timer_count, rw.error_count),
+                    print '%s   transactions: %i  timers: %i  errors: %i\r' % (
+                        p, rw.trans_count, rw.timer_count, rw.error_count),
                 else:
-                    print '%s   transactions: %i  timers: %i  errors: %i' % (p, rw.trans_count, rw.timer_count, rw.error_count)
-                    sys.stdout.write(chr(27) + '[A' )
+                    print '%s   transactions: %i  timers: %i  errors: %i' % (
+                        p, rw.trans_count, rw.timer_count, rw.error_count)
+                    sys.stdout.write(chr(27) + '[A')
                 time.sleep(1)
                 elapsed = time.time() - start_time
 
             print p
 
-        while [user_group for user_group in user_groups if user_group.is_alive()] != []:
+        while [user_group for user_group in user_groups if user_group.is_alive()]:
             if progress_bar:
                 if sys.platform.startswith('win'):
                     print 'waiting for all requests to finish...\r',
                 else:
                     print 'waiting for all requests to finish...\r'
-                    sys.stdout.write(chr(27) + '[A' )
+                    sys.stdout.write(chr(27) + '[A')
             time.sleep(.5)
 
         if not sys.platform.startswith('win'):
             print
 
     # all agents are done running at this point
-    time.sleep(.2) # make sure the writer queue is flushed
+    time.sleep(.2)  # make sure the writer queue is flushed
     print '\n\nanalyzing results...\n'
-    results.output_results(output_dir, 'results.csv', run_time, rampup, results_ts_interval, user_group_configs, xml_report)
+    results.output_results(output_dir, 'results.csv', run_time, ramp_up, results_ts_interval, user_group_configs,
+                           xml_report)
     print 'created: %sresults.html\n' % output_dir
     if xml_report:
         print 'created: %sresults.jtl' % output_dir
@@ -151,7 +155,7 @@ def run_test(project_name, cmd_opts, remote_starter=None):
         print 'loading results into database: %s\n' % results_database
         import multimechanize.resultsloader
         multimechanize.resultsloader.load_results_database(project_name, run_localtime, output_dir, results_database,
-                run_time, rampup, results_ts_interval, user_group_configs)
+                                                           run_time, ramp_up, results_ts_interval, user_group_configs)
 
     if post_run_script is not None:
         print 'running post_run_script: %s\n' % post_run_script
@@ -166,21 +170,24 @@ def run_test(project_name, cmd_opts, remote_starter=None):
     return
 
 
-
 def rerun_results(project_name, cmd_opts, results_dir):
     output_dir = '%s/%s/results/%s/' % (cmd_opts.projects_dir, project_name, results_dir)
     saved_config = '%s/config.cfg' % output_dir
-    run_time, rampup, results_ts_interval, console_logging, progress_bar, results_database, post_run_script, xml_report, user_group_configs = configure(project_name, cmd_opts, config_file=saved_config)
+    run_time, ramp_up, results_ts_interval, console_logging, progress_bar, results_database, post_run_script, \
+    xml_report, user_group_configs = configure(project_name, cmd_opts, config_file=saved_config)
     print '\n\nanalyzing results...\n'
-    results.output_results(output_dir, 'results.csv', run_time, rampup, results_ts_interval, user_group_configs, xml_report)
+    results.output_results(output_dir, 'results.csv', run_time, ramp_up, results_ts_interval, user_group_configs,
+                           xml_report)
     print 'created: %sresults.html\n' % output_dir
     if xml_report:
         print 'created: %sresults.jtl' % output_dir
         print 'created: last_results.jtl\n'
 
 
-
 def configure(project_name, cmd_opts, config_file=None):
+    # noinspection PyUnusedLocal
+    (run_time, ramp_up, results_ts_interval, console_logging, progress_bar, results_database, post_run_script,
+     xml_report, user_group_configs) = (None for i in range(9))
     user_group_configs = []
     config = ConfigParser.ConfigParser()
     if config_file is None:
@@ -189,7 +196,7 @@ def configure(project_name, cmd_opts, config_file=None):
     for section in config.sections():
         if section == 'global':
             run_time = config.getint(section, 'run_time')
-            rampup = config.getint(section, 'rampup')
+            ramp_up = config.getint(section, 'rampup')
             results_ts_interval = config.getint(section, 'results_ts_interval')
             try:
                 console_logging = config.getboolean(section, 'console_logging')
@@ -201,12 +208,12 @@ def configure(project_name, cmd_opts, config_file=None):
                 progress_bar = True
             try:
                 results_database = config.get(section, 'results_database')
-                if results_database == 'None': results_database = None
+                results_database = None if results_database == 'None' else results_database
             except ConfigParser.NoOptionError:
                 results_database = None
             try:
                 post_run_script = config.get(section, 'post_run_script')
-                if post_run_script == 'None': post_run_script = None
+                post_run_script = None if post_run_script == 'None' else post_run_script
             except ConfigParser.NoOptionError:
                 post_run_script = None
             try:
@@ -220,8 +227,9 @@ def configure(project_name, cmd_opts, config_file=None):
             ug_config = UserGroupConfig(threads, user_group_name, script)
             user_group_configs.append(ug_config)
 
-    return (run_time, rampup, results_ts_interval, console_logging, progress_bar, results_database, post_run_script, xml_report, user_group_configs)
-
+    return (
+        run_time, ramp_up, results_ts_interval, console_logging, progress_bar, results_database, post_run_script,
+        xml_report, user_group_configs)
 
 
 class UserGroupConfig(object):
@@ -229,7 +237,6 @@ class UserGroupConfig(object):
         self.num_threads = num_threads
         self.name = name
         self.script_file = script_file
-
 
 
 if __name__ == '__main__':
