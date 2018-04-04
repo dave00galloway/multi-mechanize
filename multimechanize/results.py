@@ -17,6 +17,7 @@ import reportwriterxml
 
 def output_results(results_dir, results_file, run_time, rampup, ts_interval, user_group_configs=None,
                    xml_reports=False):
+    invalid_timers = []
     results = Results(results_dir + results_file, run_time)
 
     report = reportwriter.Report(results_dir)
@@ -226,6 +227,8 @@ def output_results(results_dir, results_file, run_time, rampup, ts_interval, use
             report.write_line('<img src="%s_response_times.png"></img>' % timer_name)
             report.write_line('<h4>Throughput: %s sec time-series</h4>' % ts_interval)
             report.write_line('<img src="%s_throughput.png"></img>' % timer_name)
+        else:
+            invalid_timers.append(timer_name)
 
     ## user group times
     # for user_group_name in sorted(results.uniq_user_group_names):
@@ -243,6 +246,12 @@ def output_results(results_dir, results_file, run_time, rampup, ts_interval, use
     #    print ''
 
     report.write_line('<hr />')
+    if len(invalid_timers) > 0:
+        report.write_line('<h2>Invalid Timers</h2>')
+        report.write_line('<ul>')
+        for t in invalid_timers:
+            report.write_line('<li>' + t + '</li>')
+        report.write_line('</ul>')
     report.write_closing_html()
 
 
@@ -294,8 +303,8 @@ class Results(object):
 
             r = ResponseStats(request_num, elapsed_time, epoch_secs, user_group_name, trans_time, error, custom_timers)
 
-            if elapsed_time < self.run_time:  # drop all times that appear after the last request was sent (incomplete interval)
-                resp_stats_list.append(r)
+            # if elapsed_time < self.run_time:  # drop all times that appear after the last request was sent (incomplete interval)
+            resp_stats_list.append(r)
 
             if error != '':
                 self.total_errors += 1
