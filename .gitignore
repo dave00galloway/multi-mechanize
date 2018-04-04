@@ -4,3 +4,5 @@ _build
 build
 dist
 .tox
+/.idea
+*.log
