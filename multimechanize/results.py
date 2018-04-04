@@ -16,9 +16,9 @@ import reportwriterxml
 
 
 def output_results(results_dir, results_file, run_time, rampup, ts_interval, user_group_configs=None,
-                   xml_reports=False):
+                   xml_reports=False, allow_overrun=True):
     invalid_timers = []
-    results = Results(results_dir + results_file, run_time)
+    results = Results(results_dir + results_file, run_time, allow_overrun)
 
     report = reportwriter.Report(results_dir)
 
@@ -256,7 +256,8 @@ def output_results(results_dir, results_file, run_time, rampup, ts_interval, use
 
 
 class Results(object):
-    def __init__(self, results_file_name, run_time):
+    def __init__(self, results_file_name, run_time, allow_overrun=True):
+        self.allow_overrun = allow_overrun
         self.results_file_name = results_file_name
         self.run_time = run_time
         self.total_transactions = 0
@@ -303,8 +304,9 @@ class Results(object):
 
             r = ResponseStats(request_num, elapsed_time, epoch_secs, user_group_name, trans_time, error, custom_timers)
 
-            # if elapsed_time < self.run_time:  # drop all times that appear after the last request was sent (incomplete interval)
-            resp_stats_list.append(r)
+            # drop all times that appear after the last request was sent (incomplete interval) unless overrun allowed
+            if self.allow_overrun or elapsed_time < self.run_time:
+                resp_stats_list.append(r)
 
             if error != '':
                 self.total_errors += 1

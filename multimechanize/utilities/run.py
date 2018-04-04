@@ -73,7 +73,7 @@ def run_test(project_name, cmd_opts, remote_starter=None):
         remote_starter.output_dir = None
 
     run_time, ramp_up, results_ts_interval, console_logging, progress_bar, results_database, post_run_script, \
-    xml_report, user_group_configs = configure(project_name, cmd_opts)
+    xml_report, user_group_configs, allow_overrun = configure(project_name, cmd_opts)
 
     run_localtime = time.localtime()
     output_dir = '%s/%s/results/results_%s' % (
@@ -140,7 +140,7 @@ def run_test(project_name, cmd_opts, remote_starter=None):
     time.sleep(.2)  # make sure the writer queue is flushed
     print '\n\nanalyzing results...\n'
     results.output_results(output_dir, 'results.csv', run_time, ramp_up, results_ts_interval, user_group_configs,
-                           xml_report)
+                           xml_report, allow_overrun)
     print 'created: %sresults.html\n' % output_dir
     if xml_report:
         print 'created: %sresults.jtl' % output_dir
@@ -174,10 +174,10 @@ def rerun_results(project_name, cmd_opts, results_dir):
     output_dir = '%s/%s/results/%s/' % (cmd_opts.projects_dir, project_name, results_dir)
     saved_config = '%s/config.cfg' % output_dir
     run_time, ramp_up, results_ts_interval, console_logging, progress_bar, results_database, post_run_script, \
-    xml_report, user_group_configs = configure(project_name, cmd_opts, config_file=saved_config)
+    xml_report, user_group_configs, allow_overrun = configure(project_name, cmd_opts, config_file=saved_config)
     print '\n\nanalyzing results...\n'
     results.output_results(output_dir, 'results.csv', run_time, ramp_up, results_ts_interval, user_group_configs,
-                           xml_report)
+                           xml_report, allow_overrun)
     print 'created: %sresults.html\n' % output_dir
     if xml_report:
         print 'created: %sresults.jtl' % output_dir
@@ -187,7 +187,7 @@ def rerun_results(project_name, cmd_opts, results_dir):
 def configure(project_name, cmd_opts, config_file=None):
     # noinspection PyUnusedLocal
     (run_time, ramp_up, results_ts_interval, console_logging, progress_bar, results_database, post_run_script,
-     xml_report, user_group_configs) = (None for i in range(9))
+     xml_report, user_group_configs, allow_overrun) = (None for i in range(10))
     user_group_configs = []
     config = ConfigParser.ConfigParser()
     if config_file is None:
@@ -220,6 +220,10 @@ def configure(project_name, cmd_opts, config_file=None):
                 xml_report = config.getboolean(section, 'xml_report')
             except ConfigParser.NoOptionError:
                 xml_report = False
+            try:
+                allow_overrun = config.getboolean(section, 'allow_overrun')
+            except ConfigParser.NoOptionError:
+                allow_overrun = True
         else:
             threads = config.getint(section, 'threads')
             script = config.get(section, 'script')
@@ -229,7 +233,7 @@ def configure(project_name, cmd_opts, config_file=None):
 
     return (
         run_time, ramp_up, results_ts_interval, console_logging, progress_bar, results_database, post_run_script,
-        xml_report, user_group_configs)
+        xml_report, user_group_configs, allow_overrun)
 
 
 class UserGroupConfig(object):
